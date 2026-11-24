@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>台灣象棋暗棋 - 兩人同機對戰版</title>
+  <style>
+    /* 全域樣式與重置 */
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at top, #362f2b 0%, #1f1b18 100%);
+      color: #f5efe6;
+      font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+      padding: 16px;
+    }
+
+    /* 標題區 */
+    header {
+      text-align: center;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.35rem, 4vw, 1.85rem);
+      letter-spacing: 3px;
+      color: #f3d5a5;
+      text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+    }
+
+    .subtitle {
+      font-size: 0.85rem;
+      color: #bfa98e;
+      margin-top: 4px;
+    }
+
+    /* 狀態與控制列 */
+    .control-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 680px;
+      background: rgba(59, 51, 46, 0.92);
+      border: 1px solid #5c4d42;
+      padding: 12px 16px;
+      border-radius: 14px;
+      margin-bottom: 14px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+    }
+
+    .turn-display {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.05rem;
+      font-weight: bold;
+    }
+
+    .turn-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 0.9rem;
+      background: #4e423b;
+      color: #f5efe6;
+      border: 1px solid #756358;
+    }
+
+    .turn-badge.red {
+      background: rgba(192, 57, 43, 0.25);
+      border-color: #ff6b6b;
+      color: #ff8787;
+    }
+
+    .turn-badge.black {
+      background: rgba(52, 73, 94, 0.45);
+      border-color: #74b9ff;
+      color: #a3c4f3;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    button {
+      background: linear-gradient(180deg, #d49653 0%, #b57636 100%);
+      color: #fff;
+      border: 1px solid #e6b37a;
+      padding: 8px 15px;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
+      transition: transform 0.1s ease, filter 0.15s ease, opacity 0.15s ease;
+    }
+
+    button:hover:not(:disabled) {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+    }
+
+    button:active:not(:disabled) {
+      transform: translateY(1px);
+    }
+
+    button:disabled {
+      opacity: 0.42;
+      cursor: not-allowed;
+    }
+
+    button.secondary {
+      background: linear-gradient(180deg, #63564e 0%, #4a403a 100%);
+      border-color: #827268;
+    }
+
+    /* 4x8 木質棋盤外框與格線 */
+    .board-wrapper {
+      width: 100%;
+      max-width: 680px;
+      background: linear-gradient(145deg, #8c5d30, #5e3b1b);
+      padding: 12px;
+      border-radius: 18px;
+      box-shadow: 0 14px 32px rgba(0, 0, 0, 0.65), inset 0 2px 3px rgba(255, 255, 255, 0.2);
+      border: 3px solid #4a2e14;
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: clamp(4px, 1vw, 8px);
+      width: 100%;
+      background: #c89358;
+      padding: clamp(6px, 1.4vw, 12px);
+      border-radius: 12px;
+      border: 2px solid #754c24;
+    }
+
+    /* 單一棋格 */
+    .cell {
+      aspect-ratio: 1 / 1;
+      background: linear-gradient(145deg, #ecc999, #ddb37d);
+      border: 2px solid #9e6d38;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      position: relative;
+      transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+    }
+
+    .cell:hover {
+      background: #f5d8ae;
+    }
+
+    /* 合法移動空格高亮 */
+    .cell.valid-move {
+      background: #bcebb0;
+      border-color: #218c74;
+      box-shadow: inset 0 0 10px rgba(33, 140, 116, 0.35);
+    }
+
+    .cell.valid-move::after {
+      content: "";
+      width: 26%;
+      height: 26%;
+      border-radius: 50%;
+      background: rgba(33, 140, 116, 0.65);
+    }
+
+    /* 合法可吃子格高亮 */
+    .cell.valid-capture {
+      background: #ffc2c2;
+      border-color: #e55039;
+      box-shadow: inset 0 0 12px rgba(229, 80, 57, 0.45);
+    }
+
+    /* 最近一步標記 */
+    .cell.last-action {
+      box-shadow: inset 0 0 0 3px rgba(241, 196, 15, 0.75);
+    }
+
+    /* 棋子本體 */
+    .piece {
+      width: 84%;
+      height: 84%;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(1.1rem, 3.6vw, 1.95rem);
+      font-weight: 900;
+      transition: transform 0.14s ease, box-shadow 0.14s ease;
+      position: relative;
+    }
+
+    /* 未翻開（背面） */
+    .piece.hidden {
+      background: radial-gradient(circle at 32% 30%, #4f8560 0%, #2b5439 75%, #1d3b27 100%);
+      border: 2.5px solid #183020;
+      box-shadow: 0 4px 7px rgba(0, 0, 0, 0.45), inset 0 2px 3px rgba(255, 255, 255, 0.28);
+    }
+
+    .piece.hidden::after {
+      content: "";
+      width: 66%;
+      height: 66%;
+      border-radius: 50%;
+      border: 1.5px dashed rgba(212, 237, 218, 0.35);
+    }
+
+    /* 已翻開（正面） */
+    .piece.revealed {
+      background: radial-gradient(circle at 30% 28%, #fffdf8 0%, #f3e4c8 72%, #dfc69c 100%);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.42), inset 0 2px 3px rgba(255, 255, 255, 0.85);
+    }
+
+    .piece.revealed::before {
+      content: "";
+      position: absolute;
+      inset: 3px;
+      border-radius: 50%;
+      border: 1.5px solid currentColor;
+      opacity: 0.45;
+    }
+
+    .piece.red {
+      color: #c0392b;
+      border: 3px solid #c0392b;
+    }
+
+    .piece.black {
+      color: #1e272e;
+      border: 3px solid #2c3e50;
+    }
+
+    /* 選中狀態 */
+    .piece.selected {
+      transform: scale(1.12) translateY(-2px);
+      box-shadow: 0 0 0 4px #f1c40f, 0 8px 16px rgba(0, 0, 0, 0.55);
+      z-index: 2;
+    }
+
+    /* 訊息提示與勝負橫幅 */
+    .message-box {
+      width: 100%;
+      max-width: 680px;
+      min-height: 36px;
+      margin-top: 12px;
+      padding: 8px 14px;
+      border-radius: 10px;
+      background: rgba(59, 51, 46, 0.78);
+      border: 1px solid #57483e;
+      text-align: center;
+      font-size: 0.98rem;
+      color: #f7e6c4;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .message-box.winner {
+      background: linear-gradient(90deg, rgba(183, 121, 31, 0.35), rgba(214, 158, 46, 0.45), rgba(183, 121, 31, 0.35));
+      border-color: #f6e05e;
+      color: #fefcbf;
+      font-size: 1.15rem;
+      font-weight: bold;
+    }
+
+    /* 陣亡棋子統計面板 */
+    .captured-panel {
+      width: 100%;
+      max-width: 680px;
+      margin-top: 10px;
+      background: rgba(59, 51, 46, 0.92);
+      border: 1px solid #5c4d42;
+      padding: 12px 16px;
+      border-radius: 14px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      font-size: 0.95rem;
+    }
+
+    .captured-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .captured-label {
+      font-weight: bold;
+      min-width: 86px;
+    }
+
+    .red-label { color: #ff7675; }
+    .black-label { color: #74b9ff; }
+
+    .dead-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #efe0c4;
+      font-size: 0.85rem;
+      font-weight: bold;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    }
+
+    .dead-chip.red { color: #c0392b; border: 1.5px solid #c0392b; }
+    .dead-chip.black { color: #1e272e; border: 1.5px solid #2c3e50; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>台灣象棋暗棋</h1>
+    <div class="subtitle">兩人同機對戰版 ・ 4×8 半盤標準規則</div>
+  </header>
+
+  <!-- 頂部狀態與操作按鈕 -->
+  <div class="control-bar">
+    <div class="turn-display" id="turnDisplay">
+      <span class="turn-badge" id="turnBadge">尚未分色</span>
+      <span id="turnText">請玩家一翻開第一顆棋子</span>
+    </div>
+    <div class="btn-group">
+      <button type="button" class="secondary" id="undoBtn" disabled>悔棋</button>
+      <button type="button" id="resetBtn">重新開局</button>
+    </div>
+  </div>
+
+  <!-- 4x8 棋盤容器 -->
+  <div class="board-wrapper">
+    <div class="board" id="board"></div>
+  </div>
+
+  <!-- 提示與勝負訊息區 -->
+  <div class="message-box" id="messageBox">點擊任意綠色蓋牌翻開棋子，第一顆翻出的顏色即為玩家一陣營。</div>
+
+  <!-- 陣亡棋子統計 -->
+  <div class="captured-panel">
+    <div class="captured-row">
+      <span class="captured-label red-label">紅方陣亡：</span>
+      <div id="deadRed" style="display:flex;flex-wrap:wrap;gap:5px;">無</div>
+    </div>
+    <div class="captured-row">
+      <span class="captured-label black-label">黑方陣亡：</span>
+      <div id="deadBlack" style="display:flex;flex-wrap:wrap;gap:5px;">無</div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      "use strict";
+
+      const ROWS = 4;
+      const COLS = 8;
+
+      // 標準 32 顆棋子定義（階級 7 最大，1 最小）
+      const PIECE_DEFS = [
+        { side: "red", name: "帥", rank: 7, count: 1 },
+        { side: "red", name: "仕", rank: 6, count: 2 },
+        { side: "red", name: "相", rank: 5, count: 2 },
+        { side: "red", name: "俥", rank: 4, count: 2 },
+        { side: "red", name: "傌", rank: 3, count: 2 },
+        { side: "red", name: "炮", rank: 2, count: 2 },
+        { side: "red", name: "兵", rank: 1, count: 5 },
+        { side: "black", name: "將", rank: 7, count: 1 },
+        { side: "black", name: "士", rank: 6, count: 2 },
+        { side: "black", name: "象", rank: 5, count: 2 },
+        { side: "black", name: "車", rank: 4, count: 2 },
+        { side: "black", name: "馬", rank: 3, count: 2 },
+        { side: "black", name: "包", rank: 2, count: 2 },
+        { side: "black", name: "卒", rank: 1, count: 5 }
+      ];
+
+      // 遊戲核心狀態
+      let board = [];
+      let currentTurn = null; // "red" | "black" | null
+      let playerSides = { red: "玩家一", black: "玩家二" };
+      let selectedIdx = null;
+      let validTargets = []; // [{ idx, type: "move" | "capture" }]
+      let deadPieces = { red: [], black: [] };
+      let lastActionIndices = [];
+      let historyStack = [];
+      let gameOver = false;
+      let statusMessage = "";
+
+      // DOM 元素快取
+      const boardEl = document.getElementById("board");
+      const turnBadgeEl = document.getElementById("turnBadge");
+      const turnTextEl = document.getElementById("turnText");
+      const messageBoxEl = document.getElementById("messageBox");
+      const deadRedEl = document.getElementById("deadRed");
+      const deadBlackEl = document.getElementById("deadBlack");
+      const undoBtn = document.getElementById("undoBtn");
+      const resetBtn = document.getElementById("resetBtn");
+
+      /**
+       * 初始化 / 重新開局
+       */
+      function initGame() {
+        const deck = [];
+        for (let i = 0; i < PIECE_DEFS.length; i++) {
+          const def = PIECE_DEFS[i];
+          for (let c = 0; c < def.count; c++) {
+            deck.push({
+              side: def.side,
+              name: def.name,
+              rank: def.rank,
+              revealed: false
+            });
+          }
+        }
+
+        // Fisher-Yates 洗牌演算法
+        for (let i = deck.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          const tmp = deck[i];
+          deck[i] = deck[j];
+          deck[j] = tmp;
+        }
+
+        board = deck;
+        currentTurn = null;
+        playerSides = { red: "玩家一", black: "玩家二" };
+        selectedIdx = null;
+        validTargets = [];
+        deadPieces = { red: [], black: [] };
+        lastActionIndices = [];
+        historyStack = [];
+        gameOver = false;
+        statusMessage = "點擊任意綠色蓋牌翻開棋子，第一顆翻出的顏色即為玩家一陣營。";
+
+        render();
+      }
+
+      /**
+       * 儲存當前盤面快照以供悔棋
+       */
+      function saveSnapshot() {
+        historyStack.push({
+          board: board.map(function (p) { return p ? Object.assign({}, p) : null; }),
+          currentTurn: currentTurn,
+          playerSides: Object.assign({}, playerSides),
+          deadPieces: {
+            red: deadPieces.red.slice(),
+            black: deadPieces.black.slice()
+          },
+          lastActionIndices: lastActionIndices.slice(),
+          statusMessage: statusMessage
+        });
+      }
+
+      /**
+       * 執行悔棋（恢復上一步狀態）
+       */
+      function undoMove() {
+        if (historyStack.length === 0) return;
+        const prev = historyStack.pop();
+        board = prev.board;
+        currentTurn = prev.currentTurn;
+        playerSides = prev.playerSides;
+        deadPieces = prev.deadPieces;
+        lastActionIndices = prev.lastActionIndices;
+        statusMessage = "已悔棋，請重新操作。";
+        selectedIdx = null;
+        validTargets = [];
+        gameOver = false;
+        render();
+      }
+
+      function toRC(idx) {
+        return { r: Math.floor(idx / COLS), c: idx % COLS };
+      }
+
+      function toIdx(r, c) {
+        return r * COLS + c;
+      }
+
+      /**
+       * 判斷一般棋子（非炮/包）是否可吃掉目標明棋
+       */
+      function canNormalCapture(attacker, defender) {
+        if (!attacker || !defender || !defender.revealed) return false;
+        if (attacker.side === defender.side) return false;
+        if (attacker.rank === 2) return false; // 炮/包不可直接鄰格吃子
+
+        // 特例：兵/卒（1）可吃帥/將（7），不可吃仕/士（6）以上
+        if (attacker.rank === 1 && defender.rank === 7) return true;
+        // 特例：帥/將（7）不可吃兵/卒（1）
+        if (attacker.rank === 7 && defender.rank === 1) return false;
+
+        return attacker.rank >= defender.rank;
+      }
+
+      /**
+       * 計算指定位置棋子的所有合法移動與吃子目標
+       */
+      function getValidTargets(idx) {
+        const piece = board[idx];
+        if (!piece || !piece.revealed || piece.side !== currentTurn) return [];
+
+        const targets = [];
+        const rc = toRC(idx);
+        const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+        // 1. 車 / 俥（rank 4）：沿四方向直線移動任意多格，遇到第一顆合法敵方明棋可直接直線吃子
+        if (piece.rank === 4) {
+          for (let d = 0; d < dirs.length; d++) {
+            const dr = dirs[d][0];
+            const dc = dirs[d][1];
+            let nr = rc.r + dr;
+            let nc = rc.c + dc;
+
+            while (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+              const nIdx = toIdx(nr, nc);
+              const target = board[nIdx];
+              if (!target) {
+                targets.push({ idx: nIdx, type: "move" });
+              } else {
+                if (canNormalCapture(piece, target)) {
+                  targets.push({ idx: nIdx, type: "capture" });
+                }
+                break; // 遇到任何棋子（無論敵我、明暗或能否吃子）即停止延伸
+              }
+              nr += dr;
+              nc += dc;
+            }
+          }
+          return targets;
+        }
+
+        // 2. 其他棋子：四方向相鄰一格（移動或一般吃子）
+        for (let d = 0; d < dirs.length; d++) {
+          const nr = rc.r + dirs[d][0];
+          const nc = rc.c + dirs[d][1];
+          if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) continue;
+
+          const nIdx = toIdx(nr, nc);
+          const target = board[nIdx];
+          if (!target) {
+            targets.push({ idx: nIdx, type: "move" });
+          } else if (piece.rank !== 2 && canNormalCapture(piece, target)) {
+            targets.push({ idx: nIdx, type: "capture" });
+          }
+        }
+
+        // 3. 炮 / 包：沿直線隔恰好一顆棋子（無論明暗敵我）跳吃敵方明棋
+        if (piece.rank === 2) {
+          for (let d = 0; d < dirs.length; d++) {
+            const dr = dirs[d][0];
+            const dc = dirs[d][1];
+            let nr = rc.r + dr;
+            let nc = rc.c + dc;
+            let screenFound = false;
+
+            while (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+              const nIdx = toIdx(nr, nc);
+              const cellPiece = board[nIdx];
+
+              if (!screenFound) {
+                if (cellPiece) {
+                  screenFound = true; // 找到炮架
+                }
+              } else {
+                if (cellPiece) {
+                  // 炮架後的第一顆棋子若是敵方已翻開棋子，則可跳吃
+                  if (cellPiece.revealed && cellPiece.side !== piece.side) {
+                    targets.push({ idx: nIdx, type: "capture" });
+                  }
+                  break; // 無論能否吃子，遇到第一顆阻擋即停止搜尋該方向
+                }
+              }
+              nr += dr;
+              nc += dc;
+            }
+          }
+        }
+
+        return targets;
+      }
+
+      /**
+       * 檢查指定陣營是否還有任何合法行動（翻牌、移動或吃子）
+       */
+      function hasAnyLegalAction(side) {
+        for (let i = 0; i < board.length; i++) {
+          const p = board[i];
+          if (!p) continue;
+          // 盤面上只要還有任何未翻開的棋子，就可以執行翻牌動作
+          if (!p.revealed) return true;
+          // 檢查己方明棋是否有合法移動或吃子
+          if (p.side === side) {
+            const savedTurn = currentTurn;
+            currentTurn = side;
+            const moves = getValidTargets(i);
+            currentTurn = savedTurn;
+            if (moves.length > 0) return true;
+          }
+        }
+        return false;
+      }
+
+      /**
+       * 檢查勝負（全滅或無棋可走困斃）
+       */
+      function evaluateGameState() {
+        const redCount = board.filter(function (p) { return p && p.side === "red"; }).length;
+        const blackCount = board.filter(function (p) { return p && p.side === "black"; }).length;
+
+        if (redCount === 0) {
+          gameOver = true;
+          statusMessage = "遊戲結束！紅方全滅，黑方（" + playerSides.black + "）獲勝！";
+          return;
+        }
+        if (blackCount === 0) {
+          gameOver = true;
+          statusMessage = "遊戲結束！黑方全滅，紅方（" + playerSides.red + "）獲勝！";
+          return;
+        }
+
+        // 檢查輪到的一方是否無棋可走（困斃）
+        if (currentTurn && !hasAnyLegalAction(currentTurn)) {
+          gameOver = true;
+          const winnerSide = currentTurn === "red" ? "black" : "red";
+          const loserLabel = currentTurn === "red" ? "紅方" : "黑方";
+          const winnerLabel = winnerSide === "red" ? "紅方" : "黑方";
+          statusMessage = "遊戲結束！" + loserLabel + "無棋可走（困斃），" + winnerLabel + "（" + playerSides[winnerSide] + "）獲勝！";
+        }
+      }
+
+      /**
+       * 處理棋格點擊事件
+       */
+      function onCellClick(idx) {
+        if (gameOver) return;
+        const clicked = board[idx];
+
+        // 情況 A：點擊未翻開的蓋牌 -> 翻開棋子
+        if (clicked && !clicked.revealed) {
+          saveSnapshot();
+          clicked.revealed = true;
+          selectedIdx = null;
+          validTargets = [];
+          lastActionIndices = [idx];
+
+          const sideText = clicked.side === "red" ? "紅方" : "黑方";
+          if (!currentTurn) {
+            // 第一顆翻開的棋子顏色歸屬於玩家一
+            const firstSide = clicked.side;
+            const secondSide = firstSide === "red" ? "black" : "red";
+            playerSides[firstSide] = "玩家一";
+            playerSides[secondSide] = "玩家二";
+            currentTurn = secondSide;
+            statusMessage = "玩家一翻出「" + clicked.name + "」（" + sideText + "），輪到玩家二行動。";
+          } else {
+            const actorName = playerSides[currentTurn];
+            statusMessage = actorName + "翻開了「" + clicked.name + "」（" + sideText + "）。";
+            currentTurn = currentTurn === "red" ? "black" : "red";
+          }
+
+          evaluateGameState();
+          render();
+          return;
+        }
+
+        // 尚未分色前不可點擊空位或已翻開棋子
+        if (!currentTurn) return;
+
+        // 情況 B：已選取己方棋子，且點擊合法移動或吃子目標格
+        if (selectedIdx !== null) {
+          const action = validTargets.find(function (t) { return t.idx === idx; });
+          if (action) {
+            saveSnapshot();
+            const mover = board[selectedIdx];
+            const actorName = playerSides[currentTurn];
+
+            if (action.type === "capture" && board[idx]) {
+              const victim = board[idx];
+              deadPieces[victim.side].push(victim.name);
+              statusMessage = actorName + "使用「" + mover.name + "」吃掉了「" + victim.name + "」！";
+            } else {
+              statusMessage = actorName + "移動了「" + mover.name + "」。";
+            }
+
+            board[idx] = mover;
+            board[selectedIdx] = null;
+            lastActionIndices = [selectedIdx, idx];
+            selectedIdx = null;
+            validTargets = [];
+            currentTurn = currentTurn === "red" ? "black" : "red";
+
+            evaluateGameState();
+            render();
+            return;
+          }
+        }
+
+        // 情況 C：點擊己方已翻開的棋子 -> 選取或取消選取
+        if (clicked && clicked.revealed && clicked.side === currentTurn) {
+          if (selectedIdx === idx) {
+            selectedIdx = null;
+            validTargets = [];
+          } else {
+            selectedIdx = idx;
+            validTargets = getValidTargets(idx);
+          }
+          render();
+          return;
+        }
+
+        // 點擊其他無效位置時取消目前選取
+        if (selectedIdx !== null) {
+          selectedIdx = null;
+          validTargets = [];
+          render();
+        }
+      }
+
+      /**
+       * 渲染整個棋盤與狀態面板
+       */
+      function render() {
+        boardEl.innerHTML = "";
+
+        for (let idx = 0; idx < board.length; idx++) {
+          const piece = board[idx];
+          const cell = document.createElement("div");
+          cell.className = "cell";
+
+          if (lastActionIndices.indexOf(idx) !== -1) {
+            cell.classList.add("last-action");
+          }
+
+          const targetInfo = validTargets.find(function (t) { return t.idx === idx; });
+          if (targetInfo) {
+            cell.classList.add(targetInfo.type === "move" ? "valid-move" : "valid-capture");
+          }
+
+          if (piece) {
+            const pEl = document.createElement("div");
+            pEl.className = "piece " + (piece.revealed ? ("revealed " + piece.side) : "hidden");
+            if (selectedIdx === idx) {
+              pEl.classList.add("selected");
+            }
+            pEl.textContent = piece.revealed ? piece.name : "";
+            cell.appendChild(pEl);
+          }
+
+          (function (cellIndex) {
+            cell.addEventListener("click", function () {
+              onCellClick(cellIndex);
+            });
+          })(idx);
+
+          boardEl.appendChild(cell);
+        }
+
+        // 更新頂部回合指示
+        if (!currentTurn) {
+          turnBadgeEl.className = "turn-badge";
+          turnBadgeEl.textContent = "尚未分色";
+          turnTextEl.textContent = "請玩家一翻開第一顆棋子";
+        } else if (gameOver) {
+          turnBadgeEl.className = "turn-badge";
+          turnBadgeEl.textContent = "對局結束";
+          turnTextEl.textContent = "可點擊「重新開局」再戰一盤";
+        } else {
+          const isRed = currentTurn === "red";
+          turnBadgeEl.className = "turn-badge " + currentTurn;
+          turnBadgeEl.textContent = isRed ? "紅方回合" : "黑方回合";
+          turnTextEl.textContent = "輪到 " + playerSides[currentTurn] + "（" + (isRed ? "紅棋" : "黑棋") + "）";
+        }
+
+        // 更新訊息欄
+        messageBoxEl.textContent = statusMessage;
+        if (gameOver) {
+          messageBoxEl.classList.add("winner");
+        } else {
+          messageBoxEl.classList.remove("winner");
+        }
+
+        // 更新陣亡棋子列表
+        renderDeadList(deadRedEl, deadPieces.red, "red");
+        renderDeadList(deadBlackEl, deadPieces.black, "black");
+
+        // 更新悔棋按鈕狀態
+        undoBtn.disabled = historyStack.length === 0;
+      }
+
+      function renderDeadList(container, list, side) {
+        container.innerHTML = "";
+        if (list.length === 0) {
+          container.textContent = "無";
+          return;
+        }
+        for (let i = 0; i < list.length; i++) {
+          const chip = document.createElement("span");
+          chip.className = "dead-chip " + side;
+          chip.textContent = list[i];
+          container.appendChild(chip);
+        }
+      }
+
+      // 綁定按鈕事件
+      undoBtn.addEventListener("click", undoMove);
+      resetBtn.addEventListener("click", initGame);
+
+      // 啟動遊戲
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initGame);
+      } else {
+        initGame();
+      }
+    })();
+  </script>
+</body>
+</html>
